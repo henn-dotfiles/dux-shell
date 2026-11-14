@@ -133,6 +133,47 @@ BasePill {
         workspaceContextMenu.openFromBar(anchor);
     }
 
+    // Windows can be dropped on workspace buttons (henn labwc fork)
+    readonly property bool canDropToplevels: useExtWorkspace && ToplevelWorkspaceService.supported
+
+    // A window dragged by its titlebar was dropped over a panel: take it
+    // if the cursor is on one of this bar's workspace buttons
+    Connections {
+        target: ToplevelWorkspaceService
+        enabled: root.canDropToplevels
+        function onToplevelDropped(data) {
+            // data is in compositor layout coordinates; Qt's can be scaled
+            // on top of the output scale (e.g. by QT_FONT_DPI)
+            const screen = root.parentScreen;
+            if (!screen)
+                return;
+            const output = WlrOutputService.getOutput(screen.name);
+            const outputScale = output?.scale > 0 ? CompositorService.fractionalScale(output.scale) : 1;
+            const factor = (screen.devicePixelRatio || 1) / outputScale;
+            const x = (data.x - (output?.x ?? 0)) / factor + (screen.x ?? 0);
+            const y = (data.y - (output?.y ?? 0)) / factor + (screen.y ?? 0);
+
+            // along the bar the button must be hit; across it, the whole widget counts
+            const widget = root.mapToGlobal(0, 0);
+            const across = root.isVertical ? x - widget.x : y - widget.y;
+            if (across < 0 || across >= (root.isVertical ? root.width : root.height))
+                return;
+            for (let i = 0; i < workspaceRepeater.count; i++) {
+                const item = workspaceRepeater.itemAt(i);
+                if (!item || item.isPlaceholder || !item.visible)
+                    continue;
+                const origin = item.mapToGlobal(0, 0);
+                const along = root.isVertical ? y - origin.y : x - origin.x;
+                if (along >= 0 && along < (root.isVertical ? item.height : item.width)) {
+                    const name = root.workspaceList[i]?.name;
+                    if (name)
+                        ToplevelWorkspaceService.moveDropped(data.id, name);
+                    return;
+                }
+            }
+        }
+    }
+
     onUseExtWorkspaceChanged: refreshExtCanCreate()
     Component.onCompleted: refreshExtCanCreate()
 
@@ -397,7 +438,7 @@ BasePill {
             Item {
                 id: delegateRoot
 
-                property bool isDropTarget: root.dragTargetIndex === index
+                property bool isDropTarget: root.dragTargetIndex === index || toplevelDropArea.containsDrag
 
                 z: dragHandler.dragging ? 1000 : 1
 
@@ -721,6 +762,20 @@ BasePill {
                 HoverHandler {
                     id: pillHover
                     enabled: !isPlaceholder
+                }
+
+                // App icons dragged from Running Apps move their windows here
+                DropArea {
+                    id: toplevelDropArea
+                    anchors.fill: parent
+                    keys: ["dms-toplevels"]
+                    enabled: root.canDropToplevels && !isPlaceholder
+                    onDropped: drop => {
+                        const name = modelData?.name;
+                        for (const toplevel of drop.source?.toplevels ?? [])
+                            ToplevelWorkspaceService.moveToplevel(toplevel, name);
+                        drop.accept();
+                    }
                 }
 
                 MouseArea {

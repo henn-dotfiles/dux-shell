@@ -63,6 +63,7 @@ Singleton {
     signal brightnessStateUpdate(var data)
     signal brightnessDeviceUpdate(var device)
     signal wlrOutputStateUpdate(var data)
+    signal toplevelWorkspaceDropped(var data)
     signal evdevStateUpdate(var data)
     signal gammaStateUpdate(var data)
     signal themeAutoStateUpdate(var data)
@@ -84,7 +85,7 @@ Singleton {
     property bool screensaverInhibited: false
     property var screensaverInhibitors: []
 
-    property var activeSubscriptions: ["network", "network.credentials", "loginctl", "freedesktop", "freedesktop.screensaver", "gamma", "wallpaper", "bluetooth", "bluetooth.pairing", "brightness", "wlroutput", "evdev", "browser", "dbus"]
+    property var activeSubscriptions: ["network", "network.credentials", "loginctl", "freedesktop", "freedesktop.screensaver", "gamma", "wallpaper", "bluetooth", "bluetooth.pairing", "brightness", "wlroutput", "evdev", "browser", "dbus", "toplevelws"]
     property var connectionCapabilities: null
 
     Component.onCompleted: {
@@ -318,6 +319,8 @@ Singleton {
             }
         } else if (service === "wlroutput") {
             wlrOutputStateUpdate(data);
+        } else if (service === "toplevelws") {
+            toplevelWorkspaceDropped(data);
         } else if (service === "evdev") {
             if (data.capsLock !== undefined) {
                 capsLockState = data.capsLock;

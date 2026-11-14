@@ -276,6 +276,7 @@ BasePill {
 
             width: root.isVerticalOrientation ? root.barThickness : visualWidth
             height: root.isVerticalOrientation ? root.iconCellSize : root.barThickness
+            z: mouseArea.drag.active ? 1000 : 0
 
             BarPillSurface {
                 id: visualContent
@@ -391,8 +392,55 @@ BasePill {
                 }
             }
 
+            // Dragged onto a workspace button to move the window(s) there
+            Item {
+                id: dragProxy
+
+                readonly property var toplevels: delegateItem.isGrouped ? (delegateItem.groupData?.windows ?? []).map(w => w.toplevel) : (delegateItem.toplevelObject ? [delegateItem.toplevelObject] : [])
+
+                function reset() {
+                    x = (delegateItem.width - width) / 2;
+                    y = (delegateItem.height - height) / 2;
+                }
+
+                width: root.appIconSize
+                height: root.appIconSize
+                visible: Drag.active
+                Drag.active: mouseArea.drag.active
+                Drag.source: dragProxy
+                Drag.keys: ["dms-toplevels"]
+                Drag.hotSpot.x: width / 2
+                Drag.hotSpot.y: height / 2
+                Component.onCompleted: reset()
+
+                IconImage {
+                    anchors.fill: parent
+                    source: iconImg.source
+                    visible: iconImg.visible
+                    smooth: true
+                    mipmap: true
+                }
+            }
+
             MouseArea {
                 id: mouseArea
+
+                property bool dragged: false
+
+                drag.target: ToplevelWorkspaceService.supported && dragProxy.toplevels.length > 0 ? dragProxy : null
+                drag.smoothed: false
+                drag.onActiveChanged: {
+                    if (drag.active) {
+                        dragged = true;
+                        if (tooltipLoader.item)
+                            tooltipLoader.item.hide();
+                    }
+                }
+                onReleased: {
+                    if (dragged)
+                        dragProxy.Drag.drop();
+                    dragProxy.reset();
+                }
                 y: root.isVerticalOrientation ? 0 : -root.topMargin
                 x: root.isVerticalOrientation ? -root.leftMargin : 0
                 width: parent.width + (root.isVerticalOrientation ? root.leftMargin + root.rightMargin : 0)
@@ -401,10 +449,17 @@ BasePill {
                 cursorShape: Qt.PointingHandCursor
                 acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
                 onPressed: mouse => {
+                    dragged = false;
+                    // the dragged icon (and its drop hotspot) stays under the cursor
+                    const at = mapToItem(delegateItem, mouse.x, mouse.y);
+                    dragProxy.x = at.x - dragProxy.width / 2;
+                    dragProxy.y = at.y - dragProxy.height / 2;
                     const pos = mapToItem(visualContent, mouse.x, mouse.y);
                     itemRipple.trigger(pos.x, pos.y);
                 }
                 onClicked: mouse => {
+                    if (dragged)
+                        return;
                     if (mouse.button === Qt.LeftButton) {
                         if (isGrouped && windowCount > 1) {
                             let currentIndex = -1;

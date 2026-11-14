@@ -30,6 +30,7 @@ import (
 	"github.com/duxlabs-dev/dux-shell/core/internal/server/tailscale"
 	"github.com/duxlabs-dev/dux-shell/core/internal/server/thememode"
 	serverThemes "github.com/duxlabs-dev/dux-shell/core/internal/server/themes"
+	"github.com/duxlabs-dev/dux-shell/core/internal/server/toplevelws"
 	"github.com/duxlabs-dev/dux-shell/core/internal/server/wallpaper"
 	"github.com/duxlabs-dev/dux-shell/core/internal/server/wayland"
 	"github.com/duxlabs-dev/dux-shell/core/internal/server/wellbeing"
@@ -87,6 +88,9 @@ func newRequestMux(readiness *systemd.Readiness) *ipc.Mux {
 	}))
 
 	mux.Handle("extworkspace.create", requestHandler(extworkspace.HandleCreate))
+	mux.HandlePrefix("toplevelws.", requestHandler(func(conn *ipc.ConnWriter, req ipc.Request) {
+		toplevelws.HandleRequest(conn, req, toplevelWSManager)
+	}))
 	mux.Handle("extworkspace.remove", requestHandler(extworkspace.HandleRemove))
 	mux.Handle("extworkspace.supported", requestHandler(extworkspace.HandleSupported))
 
