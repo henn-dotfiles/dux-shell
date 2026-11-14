@@ -17,23 +17,18 @@ on it.
 
 ## Install
 
-Only the QML shell (`quickshell/`) is patched. It must match the version of
-the `dms` binary from the PPA, so keep that package on the same version
-(`apt-mark hold dms`).
+The `dms` binary embeds the QML shell (`quickshell/`), so build the binary
+from this branch; the shell then always matches it:
 
 ```sh
 git clone -b henn/main --recurse-submodules https://github.com/henn-dotfiles/dux-shell.git
-sudo mkdir -p /opt/henn/share/dms
-sudo cp -rL dux-shell/quickshell/. /opt/henn/share/dms/
+cd dux-shell
+GOTOOLCHAIN=auto make -C core dist ARCH=amd64 DIST_OSES=linux
+sudo install -Dm755 core/bin/dms-linux-amd64 /opt/henn/bin/dms
 ```
 
-Point the `dms` service at it with a systemd drop-in
-(`~/.config/systemd/user/dms.service.d/shell-dir.conf`):
-
-```ini
-[Service]
-Environment=DMS_SHELL_DIR=/opt/henn/share/dms
-```
+[henn-dotfiles/desktop](https://github.com/henn-dotfiles/desktop) does this
+and diverts `/usr/bin/dms` to the built binary.
 
 ## Updating
 
