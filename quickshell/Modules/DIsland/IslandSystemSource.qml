@@ -174,6 +174,16 @@ QtObject {
         }
     }
 
+    property Connections volumeLimitConnection: Connections {
+        target: AudioService
+        enabled: root.enabled
+
+        function onSinkVolumeAtLimit() {
+            if (SettingsData.osdVolumeEnabled)
+                root.show("volume");
+        }
+    }
+
     property Connections micConnection: Connections {
         target: AudioService.source?.audio ?? null
         enabled: root.enabled

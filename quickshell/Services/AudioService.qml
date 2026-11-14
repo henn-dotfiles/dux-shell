@@ -159,6 +159,7 @@ Singleton {
 
     signal micMuteChanged
     signal micVolumeChanged
+    signal sinkVolumeAtLimit
     signal audioOutputCycled(string deviceName, string deviceIcon)
     signal deviceAliasChanged(string nodeName, string newAlias)
     signal wireplumberReloadStarted
@@ -1743,8 +1744,10 @@ EOFCONFIG
         if (audio.muted)
             audio.muted = false;
 
-        if (newVolume === currentVolume)
+        if (newVolume === currentVolume) {
+            root.sinkVolumeAtLimit();
             return newVolume;
+        }
 
         root.writingSinkVolume = true;
         audio.volume = newVolume / 100;
