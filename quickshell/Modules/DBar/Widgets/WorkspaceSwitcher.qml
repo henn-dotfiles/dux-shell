@@ -86,6 +86,62 @@ BasePill {
 
     readonly property bool useAqueous: workspaces.useAqueous
     readonly property bool useExtWorkspace: workspaces.useExtWorkspace
+    // ext-workspace add/remove goes through the DMS server: Quickshell 0.3.2
+    // cannot create a workspace, and its Windowset.canRemove is never set
+    property bool extCanCreate: false
+    readonly property bool showAddWorkspace: useExtWorkspace && extCanCreate
+
+    function refreshExtCanCreate() {
+        if (!useExtWorkspace || !DMSService.isConnected) {
+            extCanCreate = false;
+            return;
+        }
+        DMSService.sendRequest("extworkspace.supported", null, response => {
+            root.extCanCreate = !!response?.result?.supported;
+        });
+    }
+
+    function addWorkspace() {
+        DMSService.sendRequest("extworkspace.create", {
+            "output": root.effectiveScreenName
+        }, response => {
+            if (response?.error)
+                console.warn("WorkspaceSwitcher: adding a workspace failed:", response.error);
+        });
+    }
+
+    function removeWorkspace(windowset) {
+        const name = windowset?.name;
+        if (!name)
+            return;
+        DMSService.sendRequest("extworkspace.remove", {
+            "name": name
+        }, response => {
+            if (response?.error)
+                console.warn("WorkspaceSwitcher: removing a workspace failed:", response.error);
+        });
+    }
+
+    function openWorkspaceMenu(windowset, item) {
+        workspaceContextMenu.windowset = windowset;
+        const anchor = root.contextMenuAnchor();
+        const center = item.mapToGlobal(item.width / 2, item.height / 2);
+        if (anchor.isVertical)
+            anchor.y = center.y - (anchor.screen.y || 0) + root.minTooltipY;
+        else
+            anchor.x = center.x - (anchor.screen.x || 0);
+        workspaceContextMenu.openFromBar(anchor);
+    }
+
+    onUseExtWorkspaceChanged: refreshExtCanCreate()
+    Component.onCompleted: refreshExtCanCreate()
+
+    Connections {
+        target: DMSService
+        function onIsConnectedChanged() {
+            root.refreshExtCanCreate();
+        }
+    }
     readonly property bool useNativeWorkspaces: workspaces.useNativeWorkspaces
     readonly property string effectiveScreenName: workspaces.effectiveScreenName
     readonly property bool workspacesHiddenByOverview: workspaces.hiddenByOverview
@@ -745,6 +801,10 @@ BasePill {
                                 return;
                             root.switchToWorkspaceByModelData(modelData);
                         } else if (mouse.button === Qt.RightButton) {
+                            if (root.showAddWorkspace && !isPlaceholder) {
+                                root.openWorkspaceMenu(modelData, delegateRoot);
+                                return;
+                            }
                             CompositorService.workspaceSecondaryAction(record, root.effectiveScreenName);
                             root.toggleHyprlandOverview();
                         }
@@ -1354,6 +1414,94 @@ BasePill {
                         delegateRoot.updateAllData();
                 }
             }
+        }
+
+        // Adds a workspace; drawn like an inactive workspace with a "+"
+        Item {
+            id: addWorkspaceButton
+
+            // an inactive workspace pill gives the size and colors
+            readonly property var refItem: {
+                workspaceRepeater.count;
+                root.currentWorkspace;
+                for (let i = 0; i < workspaceRepeater.count; i++) {
+                    const item = workspaceRepeater.itemAt(i);
+                    if (item && !item.isActive && !item.isPlaceholder)
+                        return item;
+                }
+                return null;
+            }
+            readonly property real fallbackPrimary: Math.max(root.widgetThickness * root.compactRatio, root.appIconSize * root.iconRatio)
+            readonly property real fallbackCross: root.widgetThickness * root.slimRatio
+            readonly property real pillWidth: refItem ? refItem.baseWidth : (root.isVertical ? fallbackCross : fallbackPrimary)
+            readonly property real pillHeight: refItem ? refItem.baseHeight : (root.isVertical ? fallbackPrimary : fallbackCross)
+            readonly property color idleColor: refItem ? refItem.unfocusedColor : Theme.surfaceTextAlpha
+            readonly property color hoverColor: refItem ? refItem.hoverColor : Theme.withAlpha(Theme.surfaceTextAlpha, root.hoverFadeAlpha)
+            readonly property color ink: refItem ? refItem.filledInk : Theme.withAlpha(Theme.surfaceText, root.inactiveLabelAlpha)
+
+            visible: root.showAddWorkspace
+            width: visible ? (root.isVertical ? root.widgetThickness : pillWidth) : 0
+            height: visible ? (root.isVertical ? pillHeight : root.widgetThickness) : 0
+
+            BarPillSurface {
+                id: addWorkspacePill
+                anchors.centerIn: parent
+                width: addWorkspaceButton.pillWidth
+                height: addWorkspaceButton.pillHeight
+                thickness: Math.min(width, height)
+                style: BarMetrics.widgetStyle(root.barConfig)
+                vertical: root.isVertical
+                pressed: addWorkspaceMouse.pressed
+                color: root.cardsStyle ? "transparent" : (addWorkspaceMouse.containsMouse ? addWorkspaceButton.hoverColor : addWorkspaceButton.idleColor)
+                border.width: root.cardsStyle ? Theme.outlineWidth : 0
+                border.color: addWorkspaceButton.idleColor
+                radiusOverride: BarMetrics.indicatorRadius(root.indicatorStyle, thickness, root.roundness)
+
+                DIcon {
+                    anchors.centerIn: parent
+                    name: "add"
+                    size: Math.max(8, Math.min(parent.width, parent.height) - 2)
+                    color: root.cardsStyle || root.linesStyle ? Theme.surfaceTextMedium : addWorkspaceButton.ink
+                }
+            }
+
+            MouseArea {
+                id: addWorkspaceMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.addWorkspace()
+            }
+        }
+    }
+
+    DContextMenu {
+        id: workspaceContextMenu
+
+        property var windowset: null
+
+        layerNamespace: "dms:workspace-context-menu"
+        menuItems: [
+            {
+                "type": "item",
+                "icon": "delete",
+                "text": I18n.tr("Delete", "workspace context menu action, removes the workspace and moves its windows to the current one"),
+                "isDestructive": true,
+                "action": () => root.removeWorkspace(workspaceContextMenu.windowset)
+            }
+        ]
+        onOpenStateChanged: {
+            const screenName = root.parentScreen?.name;
+            if (!screenName)
+                return;
+            if (openState)
+                TrayMenuManager.registerMenu(screenName, workspaceContextMenu.contextWindow);
+            else
+                TrayMenuManager.unregisterMenu(screenName);
+        }
+        Component.onDestruction: {
+            if (openState && root.parentScreen?.name)
+                TrayMenuManager.unregisterMenu(root.parentScreen.name);
         }
     }
 }
