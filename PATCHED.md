@@ -9,6 +9,7 @@ and `henn/main` merges all of them on top of the upstream release.
 | `henn/osd-volume-at-limit` | Show the volume OSD when a volume key hits 0% or 100% |
 | `henn/labwc-current-workspace` | Current-workspace window filter on labwc |
 | `henn/workspace-add-remove` | Add and delete workspaces from the workspace switcher |
+| `henn/workspace-window-drop` | Drop app icons or windows on a workspace button to move them there |
 
 ## henn/osd-volume-at-limit
 
@@ -42,6 +43,25 @@ the server (`extworkspace.supported`, `extworkspace.create`,
 `core/internal/proto/ext_workspace` holds the generated ext-workspace-v1
 bindings.
 
+## henn/workspace-window-drop
+
+Stacked on `henn/workspace-add-remove`. Needs the henn labwc fork
+(`henn/toplevel-workspace-drop`), whose private
+`zhenn_toplevel_workspace_manager_v1` moves a wlr-foreign-toplevel handle to
+a named workspace and reports where a window move ended over a panel.
+
+- Running Apps icons can be dragged onto a workspace button; the window (or
+  every window of a grouped app) moves there.
+- A window dragged by its titlebar and released on a workspace button moves
+  there, back at its geometry from before the drag. The switcher converts
+  the compositor position to Qt coordinates, which differ when Qt applies
+  its own scale (e.g. `QT_FONT_DPI`).
+
+The server (`core/internal/server/toplevelws`) keeps its own foreign-toplevel
+handles on the shared Wayland connection and matches a Quickshell toplevel
+by app id, title and creation order. Shell side:
+`Services/ToplevelWorkspaceService.qml`.
+
 ## Install
 
 The `dms` binary embeds the QML shell (`quickshell/`), so build the binary
@@ -67,10 +87,13 @@ git fetch https://github.com/duxlabs-dev/dux-shell.git --tags
 git rebase --onto <new-tag> v2.1.0 henn/osd-volume-at-limit
 git rebase --onto <new-tag> v2.1.0 henn/labwc-current-workspace
 git rebase --onto <new-tag> v2.1.0 henn/workspace-add-remove
+# stacked: <old-add-remove> is henn/workspace-add-remove before the rebase above
+git rebase --onto henn/workspace-add-remove <old-add-remove> henn/workspace-window-drop
 git checkout -B henn/main <new-tag>
 git merge --no-ff henn/osd-volume-at-limit
 git merge --no-ff henn/labwc-current-workspace
 git merge --no-ff henn/workspace-add-remove
+git merge --no-ff henn/workspace-window-drop
 ```
 
 Then add this file back to `henn/main`.
