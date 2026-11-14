@@ -15,6 +15,7 @@ import (
 	serverDgop "github.com/duxlabs-dev/dux-shell/core/internal/server/dgop"
 	serverDrives "github.com/duxlabs-dev/dux-shell/core/internal/server/drives"
 	"github.com/duxlabs-dev/dux-shell/core/internal/server/evdev"
+	"github.com/duxlabs-dev/dux-shell/core/internal/server/extworkspace"
 	"github.com/duxlabs-dev/dux-shell/core/internal/server/freedesktop"
 	"github.com/duxlabs-dev/dux-shell/core/internal/server/location"
 	"github.com/duxlabs-dev/dux-shell/core/internal/server/loginctl"
@@ -84,6 +85,10 @@ func newRequestMux(readiness *systemd.Readiness) *ipc.Mux {
 		}
 		network.HandleRequest(conn, req, networkManager)
 	}))
+
+	mux.Handle("extworkspace.create", requestHandler(extworkspace.HandleCreate))
+	mux.Handle("extworkspace.remove", requestHandler(extworkspace.HandleRemove))
+	mux.Handle("extworkspace.supported", requestHandler(extworkspace.HandleSupported))
 
 	mux.HandlePrefix("plugins.", requestHandler(serverPlugins.HandleRequest))
 
