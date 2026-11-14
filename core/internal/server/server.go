@@ -32,6 +32,7 @@ import (
 	"github.com/duxlabs-dev/dux-shell/core/internal/server/sysupdate"
 	"github.com/duxlabs-dev/dux-shell/core/internal/server/tailscale"
 	"github.com/duxlabs-dev/dux-shell/core/internal/server/thememode"
+	"github.com/duxlabs-dev/dux-shell/core/internal/server/toplevelws"
 	"github.com/duxlabs-dev/dux-shell/core/internal/server/trayrecovery"
 	"github.com/duxlabs-dev/dux-shell/core/internal/server/wallpaper"
 	"github.com/duxlabs-dev/dux-shell/core/internal/server/wayland"
@@ -72,6 +73,7 @@ var cupsManager *cups.Manager
 var tailscaleManager *tailscale.Manager
 var brightnessManager *brightness.Manager
 var wlrOutputManager *wlroutput.Manager
+var toplevelWSManager *toplevelws.Manager
 var evdevManager *evdev.Manager
 var clipboardManager *clipboard.Manager
 var dbusManager *serverDbus.Manager
@@ -736,6 +738,15 @@ func handleSubscribe(ctx context.Context, conn *ipc.ConnWriter, req ipc.Request)
 		}, nil)
 	}
 
+	if shouldSubscribe("toplevelws") && toplevelWSManager != nil {
+		mgr := toplevelWSManager
+		id := clientID + "-toplevelws"
+		source := mgr.Subscribe(id)
+		forwardSubscription(&wg, eventChan, stopChan, "toplevelws", source, func() {
+			mgr.Unsubscribe(id)
+		}, nil)
+	}
+
 	if shouldSubscribe("wlroutput") && wlrOutputManager != nil {
 		mgr := wlrOutputManager
 		id := clientID + "-wlroutput"
@@ -1340,6 +1351,13 @@ func (s *Server) Serve(printDocs bool) error {
 
 	if err := InitializeWlrOutputManager(); err != nil {
 		log.Debugf("WlrOutput manager unavailable: %v", err)
+	}
+	if wlContext != nil {
+		if mgr, err := toplevelws.NewManager(wlContext.Display(), wlContext); err != nil {
+			log.Debugf("ToplevelWorkspace manager unavailable: %v", err)
+		} else {
+			toplevelWSManager = mgr
+		}
 	}
 
 	fatalErrChan := make(chan error, 1)
