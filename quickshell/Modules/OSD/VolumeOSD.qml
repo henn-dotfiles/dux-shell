@@ -47,6 +47,15 @@ LevelOSD {
         }
     }
 
+    Connections {
+        target: AudioService
+
+        function onSinkVolumeAtLimit() {
+            if (SettingsData.osdVolumeEnabled)
+                root.show();
+        }
+    }
+
     readonly property var audioSink: AudioService.sink
 
     onAudioSinkChanged: {
