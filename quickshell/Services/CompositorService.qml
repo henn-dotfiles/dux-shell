@@ -819,7 +819,18 @@ Singleton {
             return MangoService.filterCurrentWorkspace(toplevels, screen);
         if (isHyprland)
             return filterHyprlandCurrentWorkspaceSafe(toplevels, screen);
+        if (isLabwc)
+            return filterLabwcCurrentWorkspace(toplevels, screen);
         return toplevels;
+    }
+
+    // labwc (henn fork) only reports foreign-toplevel outputs for windows on
+    // a shown workspace, so a window with no screens is on a hidden one.
+    function filterLabwcCurrentWorkspace(toplevels, screen) {
+        const name = _screenName(screen);
+        if (name)
+            return toplevels.filter(t => _toplevelOnScreen(t, name));
+        return toplevels.filter(t => (t?.screens?.length ?? 0) > 0);
     }
 
     readonly property string toplevelKey: {
